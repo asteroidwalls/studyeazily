@@ -182,6 +182,15 @@ async function main() {
   const prefDocs = Object.keys(byId).map((id) => byId[id]);
   if (!prefDocs.length) { console.log("Nobody has reminders turned on."); return; }
 
+  // Class memberships: uid -> Set of classIds (for class-only items)
+  const memSnap = await db.collection("memberships").get();
+  const classesOf = {};
+  memSnap.docs.forEach((d) => {
+    const x = d.data();
+    if (!x.uid || !x.classId) return;
+    (classesOf[x.uid] = classesOf[x.uid] || new Set()).add(x.classId);
+  });
+
   const userSnaps = await db.getAll(...prefDocs.map((d) => db.collection("users").doc(d.id)));
   const subs = [];
   for (let i = 0; i < prefDocs.length; i++) {
@@ -205,7 +214,7 @@ async function main() {
       examHours: p.examHours || DEFAULTS.examHours,
       eventHours: p.eventHours || DEFAULTS.eventHours
     };
-    const base = { uid: d.id, tz: p.tz || DEFAULT_TZ, hours: hours };
+    const base = { uid: d.id, tz: p.tz || DEFAULT_TZ, hours: hours, classes: classesOf[d.id] || new Set() };
 
     if (p.pushOn === true && tokens.length) {
       subs.push(Object.assign({ channel: "push", tokens: tokens, since: p.pushSince || 0 }, base));
@@ -232,7 +241,10 @@ async function main() {
     for (const g of GROUPS) {
       for (const item of items[g.col]) {
         if (!item.date) continue;
-        if (!(item.scope === "shared" || item.ownerId === sub.uid)) continue;
+        const visible = item.scope === "shared" ||
+          item.ownerId === sub.uid ||
+          (item.scope === "class" && item.classId && sub.classes.has(item.classId));
+        if (!visible) continue;
 
         const due = dueTs(item.date, item.time, sub.tz);
         if (due <= now) continue;
@@ -260,7 +272,6 @@ async function main() {
     snaps.forEach((snap, i) => { if (snap.exists) finished.add(taskJobs[i]); });
   }
 
-  // 6. Send
   let pushSent = 0;
   let mailSent = 0;
   for (const j of jobs) {
