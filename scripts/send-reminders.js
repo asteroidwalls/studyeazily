@@ -16,8 +16,8 @@ const DRY_RUN = process.env.DRY_RUN === "1";
 const DEFAULTS = { assignmentHours: [24, 12], examHours: [24], eventHours: [1] };
 
 const GROUPS = [
-  { col: "events", label: "Event", prefix: "Event starts in ", key: "eventHours", checkDone: false },
-  { col: "exams", label: "Exam", prefix: "Exam in ", key: "examHours", checkDone: false },
+  { col: "events", label: "Event", prefix: "Event starts in ", key: "eventHours", checkDone: true },
+  { col: "exams", label: "Exam", prefix: "Exam in ", key: "examHours", checkDone: true },
   { col: "tasks", label: "Assignment", prefix: "Assignment due in ", key: "assignmentHours", checkDone: true }
 ];
 
