@@ -183,12 +183,21 @@ async function main() {
   if (!prefDocs.length) { console.log("Nobody has reminders turned on."); return; }
 
   // Class memberships: uid -> Set of classIds (for class-only items)
-  const memSnap = await db.collection("memberships").get();
+  // and uid -> Set of subjectIds (for subject-restricted shared items)
+  const [memSnap, classSnap] = await Promise.all([
+    db.collection("memberships").get(),
+    db.collection("classes").get()
+  ]);
+  const subjectOfClass = {};
+  classSnap.docs.forEach((d) => { subjectOfClass[d.id] = d.data().subjectId || ""; });
   const classesOf = {};
+  const subjectsOf = {};
   memSnap.docs.forEach((d) => {
     const x = d.data();
     if (!x.uid || !x.classId) return;
     (classesOf[x.uid] = classesOf[x.uid] || new Set()).add(x.classId);
+    const sid = subjectOfClass[x.classId];
+    if (sid) (subjectsOf[x.uid] = subjectsOf[x.uid] || new Set()).add(sid);
   });
 
   const userSnaps = await db.getAll(...prefDocs.map((d) => db.collection("users").doc(d.id)));
@@ -214,7 +223,7 @@ async function main() {
       examHours: p.examHours || DEFAULTS.examHours,
       eventHours: p.eventHours || DEFAULTS.eventHours
     };
-    const base = { uid: d.id, tz: p.tz || DEFAULT_TZ, hours: hours, classes: classesOf[d.id] || new Set() };
+    const base = { uid: d.id, tz: p.tz || DEFAULT_TZ, hours: hours, classes: classesOf[d.id] || new Set(), subjects: subjectsOf[d.id] || new Set() };
 
     if (p.pushOn === true && tokens.length) {
       subs.push(Object.assign({ channel: "push", tokens: tokens, since: p.pushSince || 0 }, base));
@@ -241,7 +250,9 @@ async function main() {
     for (const g of GROUPS) {
       for (const item of items[g.col]) {
         if (!item.date) continue;
-        const visible = item.scope === "shared" ||
+        // "public" = everyone. "shared" with a subject = only people who joined a class in that subject.
+        const visible = item.scope === "public" ||
+          (item.scope === "shared" && (!item.subjectId || sub.subjects.has(item.subjectId))) ||
           item.ownerId === sub.uid ||
           (item.scope === "class" && item.classId && sub.classes.has(item.classId));
         if (!visible) continue;
