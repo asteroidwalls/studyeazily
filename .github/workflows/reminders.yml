@@ -2,8 +2,8 @@ name: Send reminders
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay it a few minutes)
-  workflow_dispatch: {}      # lets you run it by hand from the Actions tab
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}      
 
 concurrency:
   group: reminders
